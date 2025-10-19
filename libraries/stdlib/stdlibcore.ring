@@ -4,6 +4,7 @@
 # 2016-2019, CalmoSoft <calmosoft@gmail.com>
 # 2020, Bert Mariani (Matrix Multiplication)
 # 2023, Dan Campbell (Reduce function)
+# 2025, Youssef Saeed (Base32 and Base64 functions)
 
 Load "stdlib.rh"
 Load "stdfunctions.ring"
@@ -15,13 +16,8 @@ Load "stdfunctions.ring"
 	Output		: the result of the test (0,1)
 */
 Func IsAppCompiled
-	# when running under the interpreter, we have at least two arguments
-	# and the second argument is equal to filename() output
-	if (Len(sysargv) >= 2) and (sysargv[2] = filename())
-		return false
-	else
-		return true
-	ok
+	cAppFileName = substr(lower(JustFileName(exefilename())),".exe","")
+	return (cAppFileName != "ring") and (cAppFileName != "ringw")
 	
 /*
 	Function Name	: apparguments
@@ -236,21 +232,24 @@ Func Split(cString, delimiter)
 	singleSpace = " "
 	singleTab   = char(9)
 	
-	if ( (delimiter = singleTab) or (delimiter = singleSpace) )
+	if delimiter = singleTab
 		delimiter = singleSpace
 	ok
 
 	if ( delimiter = singleSpace )
+		# Replace Tab with Space
 		do
-			cString = substr(cstring, singleTab, singleSpace)   ### Replace Tab with Space
+			cString = substr(cstring, singleTab, singleSpace)   
 		again substr(cString, singleTab)
 
+		# Replace DoubleSpace with Space
 		do
-			cString = substr(cString, doubleSpace, singleSpace) ### Replace DoubleSpace with Space
+			cString = substr(cString, doubleSpace, singleSpace) 
 		again substr(cString, doubleSpace)
 	ok
 	
-	cString = trim(cString) ### Remove leading and trailing spaces
+	# Remove leading and trailing spaces
+	cString  = trim(cString) 
 	cStrList = str2list(substr(cString, delimiter, nl))
 
 	return cStrList
@@ -330,7 +329,7 @@ Func LineCount text
 	Output		: factorial of a number.
 */
 
-Func Factorial n if n = 0 return 1 else return n * factorial(n-1) ok
+Func Factorial n  if n = 0 return 1 ok nRes = 1 for t=1 to n nRes *= t next return nRes
 
 /*
 	Function Name	: fibonacci
@@ -342,7 +341,13 @@ Func Factorial n if n = 0 return 1 else return n * factorial(n-1) ok
 Func Fibonacci n
 	if n = 0 return 0 ok
 	if n = 1 return 1 ok 
-	if n > 1 return fibonacci(n-1) + fibonacci(n-2) ok
+	aFibRes = [ ["0", 0], ["1", 1] ]
+	if n > 1
+		for t=2 to n
+			aFibRes[""+t] = aFibRes[""+(t-1)] + aFibRes[""+(t-2)]
+		next 
+		return aFibRes[""+n]
+	ok
     
 /*
 	Function Name	: isprime
@@ -952,7 +957,7 @@ func OSCopyFolder cParentFolder,cFolder
 	if isWindows()
 		systemsilent("xcopy /e /y /j " + cCompleteFolderPath)
 	else 
-		systemsilent("cp -R " + cCompleteFolderPath + " ./")
+		systemsilent("cp -R " + cCompleteFolderPath + " ../")
 	ok
 	chdir(cCurrentFolder)
 
@@ -971,12 +976,12 @@ func OSDeleteFolder cFolder
 	Copy File to the current directory
 */
 func OSCopyFile cFile
-	if len(cFile) >= 1
-		if cFile[1] != '"'
-			cFile = '"' + cFile + '"'
-		ok
-	ok
 	if isWindows()
+		if len(cFile) >= 1
+			if cFile[1] != '"'
+				cFile = '"' + cFile + '"'
+			ok
+		ok
 		cFile = substr(cFile,"/","\")
 		systemSilent("copy " + cFile)
 	else 
@@ -1066,6 +1071,170 @@ func ASCIIList2Str aList
 		cStr += char(nNum)
 	next 
 	return cStr 
+
+/*
+	Function Name  : StringToBase32
+	Usage	       : Convert a string to a Base32 encoded string
+	Parameters	   : String to encode
+	Output		   : Base32 encoded string
+*/
+func StringToBase32 cInputString
+	# Base32 chars
+	cBase32Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+
+	# Bit buffer
+	cOutputString = NULL
+	nBuffer = 0
+	nBitsLeft = 0
+
+	for cChar in cInputString
+		nBuffer = (nBuffer << 8) | ascii(cChar)
+		nBitsLeft += 8
+		
+		while nBitsLeft >= 5
+			nBitsLeft -= 5
+			nIndex = (nBuffer >> nBitsLeft) & 31
+			cOutputString += cBase32Chars[nIndex + 1]
+
+			nBuffer = nBuffer & ((1 << nBitsLeft) - 1)
+		end
+	next
+
+	if nBitsLeft > 0
+		nBuffer = nBuffer << (5 - nBitsLeft)
+		nIndex = nBuffer & 31
+		cOutputString += cBase32Chars[nIndex + 1]
+	ok
+
+	while len(cOutputString) % 8 != 0
+		cOutputString += "="
+	end
+
+	return cOutputString
+
+/*
+	Function Name	: Base32ToString
+	Usage		    : Convert a Base32 encoded string back to original string
+	Parameters	    : Base32 encoded string to decode
+	Output		    : Decoded string
+*/
+func Base32ToString cInputString
+	# Base32 chars
+	cBase32Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+
+	# Build lookup list
+	aLookup = list(256)
+	for nI = 1 to 256 aLookup[nI] = -1 next
+	for nI = 1 to len(cBase32Chars)
+		aLookup[ascii(cBase32Chars[nI])] = nI - 1
+	next
+
+	# Bit buffer
+	cOutputString = NULL
+	nBuffer = 0
+	nBitsLeft = 0
+	
+	# Clean input
+	cCleanInput = upper(cInputString)
+
+	for cChar in cCleanInput
+		nValue = aLookup[ascii(cChar)]
+		# Skip invalid characters
+		if nValue = -1 continue ok
+
+		nBuffer = (nBuffer << 5) | nValue
+		nBitsLeft += 5
+
+		if nBitsLeft >= 8
+			nBitsLeft -= 8
+			nByte = (nBuffer >> nBitsLeft) & 255
+			cOutputString += char(nByte)
+
+			nBuffer = nBuffer & ((1 << nBitsLeft) - 1)
+		ok
+	next
+	
+	return cOutputString
+
+/*
+	Function Name   : StringToBase64
+	Usage           : Convert a string to a Base64 encoded string
+	Parameters      : String to encode
+	Output          : Base64 encoded string
+*/
+func StringToBase64 cInputString
+	# Base64 chars
+	cBase64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+	# Bit buffer
+	cOutputString = NULL
+	nBuffer = 0
+	nBitsLeft = 0
+
+	for cChar in cInputString
+		nBuffer = (nBuffer << 8) | ascii(cChar)
+		nBitsLeft += 8
+		
+		while nBitsLeft >= 6
+			nBitsLeft -= 6
+			nIndex = (nBuffer >> nBitsLeft) & 63
+			cOutputString += cBase64Chars[nIndex + 1]
+			nBuffer = nBuffer & ((1 << nBitsLeft) - 1)
+		end
+	next
+
+	# Handle any leftover bits
+	if nBitsLeft > 0
+		nBuffer = nBuffer << (6 - nBitsLeft)
+		nIndex = nBuffer & 63
+		cOutputString += cBase64Chars[nIndex + 1]
+	ok
+
+	# Add padding
+	while len(cOutputString) % 4 != 0
+		cOutputString += "="
+	end
+
+	return cOutputString
+
+/*
+	Function Name   : Base64ToString
+	Usage           : Convert a Base64 encoded string back to original string
+	Parameters      : Base64 encoded string to decode
+	Output          : Decoded string
+*/
+func Base64ToString cInputString
+	# Base64 chars
+	cBase64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+	# Build lookup list
+	aLookup = list(256)
+	for nI = 1 to 256 aLookup[nI] = -1 next
+	for nI = 1 to len(cBase64Chars)
+		aLookup[ascii(cBase64Chars[nI])] = nI - 1
+	next
+
+	cOutputString = NULL
+	nBuffer = 0
+	nBitsLeft = 0
+
+	for cChar in cInputString
+		nValue = aLookup[ascii(cChar)]
+		# Skip invalid characters
+		if nValue = -1 continue ok
+
+		nBuffer = (nBuffer << 6) | nValue
+		nBitsLeft += 6
+
+		if nBitsLeft >= 8
+			nBitsLeft -= 8
+			nByte = (nBuffer >> nBitsLeft) & 255
+			cOutputString += char(nByte)
+			nBuffer = nBuffer & ((1 << nBitsLeft) - 1)
+		ok
+	next
+	
+	return cOutputString
 
 /*
 	Get Item from time information list

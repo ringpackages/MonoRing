@@ -90,14 +90,14 @@ func List2CSV_Process aList,nStart
 				}
 			}
 		elseif isList(item)
-			if nStart! = 0 { 
+			if nStart != 0 { 
 				cOutput += nl
 			} 
 			cOutput += List2CSV_Process(item,nStart+1)
 		}
 		nIndex++
 	}
-	if nStart! = 0 { 
+	if nStart != 0 { 
 		cOutput += nl
 	} 
 	return cOutput 
@@ -121,13 +121,6 @@ func CSV2List cString
 			switch t { 
 				case char(34)
 					lSupportComma = ! lSupportComma
-					if (nIndex !=1) AND (nIndex != nSize) { 
-						if cLine[nIndex+1] != "," { 
-							if lSupportComma { 
-								cToken += t
-							}
-						}
-					}
 				case ","
 					if lSupportComma { 
 						CSV2List_AddItem(aSubList, cToken)
