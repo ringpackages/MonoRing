@@ -2,13 +2,18 @@
 # Author: Azzeddine Remmal (azzeddine.remmal@gmail.com)
 # Date: 29-07-2023
 # Description: Thread Pools With Function
+# Updated by Fayed 
+#	(1) Using mtx_unlock() before using Exit from While loop 
+#	(2) Using thrd_exit() at the end of thread execution
+#	(3) Enabling the Debug flag & changing THREAD_NUM value to 20
+#	(4) Using Del() to delete tasks from Queue instead of Shifting items
 
 load "stdlibcore.ring"
 load "threads.ring"
 
-lDebug     = false
+lDebug     = true 
 nTaskCount = 1  
-THREAD_NUM = 4
+THREAD_NUM = 20
 aTaskQueue = list(1024)
 aThreads   = list(THREAD_NUM)
 mutexQueue = new_mtx_t()
@@ -54,6 +59,7 @@ func main
     destroy_cnd_t(condQueue)
 
     ? nl+"Thanks!"
+
   
 func sum(a,b) 
 
@@ -91,25 +97,29 @@ func startThread(nThread)
         end
 
         Task = aTaskQueue[1]
-        for i = 1 to nTaskCount 
-            aTaskQueue[i] = aTaskQueue[i + 1]
-        next
+        # Delete task from queue 
+            del(aTaskQueue,1)
+            aTaskQueue + 0
         nTaskCount--
 
-	if Task.taskFunction = :bye 
+        if Task.taskFunction = :bye 
             if lDebug ? nl+"Terminate Thread: "+ nThread ok
-	    exit 
-	ok
+            mtx_unlock(mutexQueue)
+            exit 
+        ok
 
         mtx_unlock(mutexQueue)
 
-	if lDebug ? nl+"Execute Task by Thread: " + nThread ok
+        if lDebug ? nl+"Execute Task by Thread: " + nThread ok
+
         executeTask(Task)
         sleep(0.01)
 
     end
 
     if lDebug ? nl+"End of thread: " + nThread ok
+
+    thrd_exit(0)
 
 class Task 
 
