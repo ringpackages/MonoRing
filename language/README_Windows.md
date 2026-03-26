@@ -6,26 +6,26 @@
 
 ### Get the source code
 
-	git clone http://github.com/idrassi/MonoRing.git
+	git clone https://github.com/idrassi/MonoRing.git
 	
 ### Build Ring (Compiler/VM)
 	
-	cd ring/language/src
+	cd MonoRing\language\build
 	buildvc.bat
 
 ### Build Ring2EXE 
 
-	cd ring/tools/ring2exe
-	buildring2exe.bat 
+	cd MonoRing\tools\ring2exe
+	build.bat
 
 ### Build RingPM
 
-	cd ring/tools/ringpm
-	buildringpm.bat 
+	cd MonoRing\tools\ringpm
+	build.bat
 
 ### To be able to call ring from any folder 
 	
-	cd ring/bin
+	cd MonoRing\bin
 	install.bat
 	
 #### Add Ring/bin to System path
