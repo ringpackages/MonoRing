@@ -29,6 +29,17 @@ jobs:
     - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v1.0.2
 
+    - name: Detect Ring Version
+      id: ring-version
+      shell: pwsh
+      run: |
+        $stateHeader = Get-Content -Raw -Path '.\language\include\state.h'
+        if ($stateHeader -match '#define\s+RING_STATE_VERSION\s+"([^"]+)"') {
+          "value=$($matches[1])" >> $env:GITHUB_OUTPUT
+        } else {
+          throw 'Unable to determine Ring version from language/include/state.h'
+        }
+
     - name: Build
       working-directory: ${{env.GITHUB_WORKSPACE}}
       # Add additional options to the MSBuild command line here (like platform or verbosity level).
@@ -41,7 +52,7 @@ jobs:
       id: upload-artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: MonoRing_1.17_${{env.SHA}}_${{env.BUILD_PLATFORM}}
+        name: MonoRing_${{ steps.ring-version.outputs.value }}_${{env.SHA}}_${{env.BUILD_PLATFORM}}
         path: |
           .\bin
           !.\bin\ringcloc.bat
