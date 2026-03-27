@@ -24,10 +24,12 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
 
     - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v1.0.2
+      uses: microsoft/setup-msbuild@v3
+      with:
+        msbuild-architecture: x64
 
     - name: Detect Ring Version
       id: ring-version
@@ -46,13 +48,15 @@ jobs:
       # See https://docs.microsoft.com/visualstudio/msbuild/msbuild-command-line-reference
       run: msbuild /m /p:Configuration=${{env.BUILD_CONFIGURATION}} /p:Platform=${{env.BUILD_PLATFORM}} ${{env.SOLUTION_FILE_PATH}}
     - name: Get Short Hash
-      id: get-short-hash
-      uses: benjlevesque/short-sha@v1.2
+      id: short-sha
+      shell: pwsh
+      run: |
+        "value=$(git rev-parse --short=7 HEAD)" >> $env:GITHUB_OUTPUT
     - name: Upload Artifacts
       id: upload-artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
-        name: MonoRing_${{ steps.ring-version.outputs.value }}_${{env.SHA}}_${{env.BUILD_PLATFORM}}
+        name: MonoRing_${{ steps.ring-version.outputs.value }}_${{ steps.short-sha.outputs.value }}_${{env.BUILD_PLATFORM}}
         path: |
           .\bin
           !.\bin\ringcloc.bat
