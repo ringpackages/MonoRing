@@ -6,6 +6,7 @@ The embedded extensions are:
  - cJson
  - ConsoleColors
  - Curl
+ - FastPro
  - httplib
  - internet
  - libui
@@ -18,6 +19,7 @@ The embedded extensions are:
  - stbimage
  - winapi
  - wincreg
+ - winlib
  - zip
 
 A Ring script that runs under MonoRing can be compiled as a native Windows applications that has no extra runtime dependency and so it can be deployed easily.

@@ -583,8 +583,8 @@ RING_API void ring_state_usageinfo(void) {
 	ring_general_printline();
 	printf("Ring version %s (MonoRing distribution by Mounir IDRASSI)\n", RING_STATE_VERSIONANDPATCH);
 	puts("2013-2026, Mahmoud Fayed <msfclipper@yahoo.com>\n");
-	puts("Builtin extensions: cJson,ConsoleColors,Curl,httplib,internet,libui,libuv,");
-	puts("murmurhash,odbc,OpenSSL,sockets,sqlite,stbimage,winapi,wincreg,zip\n");
+	puts("Builtin extensions: cJson,ConsoleColors,Curl,fastpro,httplib,internet,libui,libuv,");
+	puts("murmurhash,odbc,OpenSSL,sockets,sqlite,stbimage,winapi,wincreg,winlib,zip\n");
 	puts("Usage : ring filename.ring [Options]");
 	ring_general_printline();
 	/* Options */
