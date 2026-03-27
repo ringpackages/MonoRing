@@ -1,4 +1,4 @@
-![Ring](http://ring-lang.sf.net/thering.jpg)
+![Ring](https://ring-lang.github.io/images/theringlogo.jpg)
 
 # Ring Programming Language (MonoRing build)
 

@@ -89,6 +89,7 @@
 */
 
 load "stdlibcore.ring"
+load "tokenslib.ring"
 
 # Load Libraries information
 	aLibsInfo = []
@@ -97,7 +98,12 @@ load "stdlibcore.ring"
 func LoadLibrariesInfo
 	aLibsFiles = ListAllFiles(exefolder()+"/../tools/ring2exe/libs","ring")
 	for cLibFile in aLibsFiles 
-		eval(read(cLibFile))
+		cLibFileContent = read(cLibFile)
+		if ! checkRingCode([:code = cLibFileContent])
+			? "The file " + cLibFile + " doesn't pass the security check!"
+			loop
+		ok
+		eval(cLibFileContent)
 		aLibsInfo + aLibrary 
 	next 
 
@@ -125,7 +131,7 @@ func Main
 	else 
 		drawline()
 		see "Ring2EXE (Convert Ring Application To Executable File)" + nl
-		see "2017-2025, Mahmoud Fayed <msfclipper@yahoo.com>" + nl
+		see "2017-2026, Mahmoud Fayed <msfclipper@yahoo.com>" + nl
 		see "Usage : ring2exe filename.ring [Options]" + nl
 		drawline()
 		see RemoveTabs("
@@ -238,17 +244,17 @@ func GenerateCFile cFileName,aOptions
 	fputs(fp,cCode)
 	# Add the Object File Content		
 		fputs(fp,cHex)
-	fputs(fp, ", EOF" + char(9) + "};"+substr(
+	fputs(fp, ", EOF" + char(9) + "};"+substr(substr(
 	'
 
 	RingState *pRingState ;
 	pRingState = ring_state_new();	
 	pRingState->nArgc = argc;
 	pRingState->pArgv = argv;
-	ring_state_runobjectstring(pRingState,(char *) bytecode,"#{f1}");
+	ring_state_runobjectstring(pRingState,(char *) bytecode,#{f2},"#{f1}");
 	ring_state_delete(pRingState);
 
-	return 0;',"#{f1}",cFileName+".ring") + nl + 
+	return 0;',"#{f1}",cFileName+".ring"),"#{f2}",""+len(cFile)) + nl + 
 	"}")
 	fclose(fp)	
 	msg("Generation Time : " + ((clock()-nTime)/clockspersecond()) + " seconds...")

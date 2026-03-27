@@ -1,5 +1,5 @@
 # The Ring Natural Library
-# 2017, Mahmoud Fayed <msfclipper@yahoo.com>
+# 2017-2026, Mahmoud Fayed <msfclipper@yahoo.com>
 
 load "stdlibcore.ring"
 
@@ -7,100 +7,129 @@ DefineNaturalCommand = new NaturalCommand
 
 class NaturalCommand
 
-	cPackage cKeyword  fFunc oObject aAllKeywords=[]
+	cPackage = ""
+	cKeyword  fFunc  
 	cCommand cCommandNoSpaces aKeywords
 
+	aListofCommands = []
+	aAllKeywords = []
+	aAllAttributes = []
+	aAllKeywordsMethods = []
 
-	func Para2Attributes aPara
-		cPackage = aPara[:Package]
-		cKeyword = aPara[:Keyword]
+	lSyntaxIsKeyword = False
+
+	lCacheCommands = False
+	cCommandsCache = ""
+	cGroupName = :ManyCommands
+
+	func setPackage cName
+		cPackage = cName
+
+	func setPackageName cName
+		return setPackage(cName)
+
+	func prepareCommandParameters aPara
+		if aPara[:Package] {
+			cPackage = aPara[:Package]
+		elseif ! cPackage
+			raise(C_NATLIB_ERROR_PASSPACKAGE) 
+		}
+		if ! aPara[:Function] {
+			raise(C_NATLIB_ERROR_PASSFUNCTION)
+		}
 		fFunc = aPara[:Function]
 
+	func Para2Attributes aPara
+		prepareCommandParameters(aPara)
+		if ! aPara[:Keyword] {
+			raise(C_NATLIB_ERROR_PASSKEYWORD)
+		}
+		cKeyword = lower(trim(aPara[:Keyword]))
+		if substr(cKeyword," ") {
+			raise(C_NATLIB_ERROR_MANYKEYWORDS)
+		}
+		cCommandNoSpaces = cKeyword
+		checkCommandRedefinition(cKeyword)
+
+	func CommandPara2Attributes aPara
+		prepareCommandParameters(aPara)
+		if ! aPara[:Command] {
+			raise(C_NATLIB_ERROR_PASSCOMMAND)
+		}
+		cCommand = lower(trim(aPara[:Command]))
+		cCommandNoSpaces = substr(cCommand," ","")				
+		aKeywords = split(cCommand," ")
+		if len(aKeywords) < 2 {
+			raise(C_NATLIB_ERROR_ONEKEYWORD)
+		}
+		checkCommandRedefinition(cCommandNoSpaces)
+
+	func checkCommandRedefinition cCommand
+		if find(aListofCommands,cCommand) {
+			raise(C_NATLIB_ERROR_CMDEXIST)
+		}
+		aListofCommands + cCommand
+
 	func CreateTheTempClass
-		cCode = "
-			oObject = new #{f1}.#{f2}
-			Package #{f1}
-			Class #{f2}
-		"
-		cCode = substr(cCode,"#{f1}",cPackage)
-		cCode = substr(cCode,"#{f2}",cKeyword)
-		eval(cCode)
+		cCode = ""
+		if ! lCacheCommands {
+			cCode = "Package " + cPackage + nl + "Class " + cCommandNoSpaces + nl 
+		}
+
+		if lSyntaxIsKeyword {
+			cCode += " func Get" +cCommandNoSpaces + " { prepareCallerScope() " +
+					"fMethod = :" + fFunc + " return call { fMethod() }" + " }" + nl 
+		else
+			cCode += " func BraceExecute_" +cCommandNoSpaces + " { " +
+					 "return executeCommandFunction(:"+fFunc +")"+" }" + nl
+		}
+
+		return cCode
 
 	func DefineAddAttributes
-		cCode = " 	f1 = func { if ! isAttribute(self,:#{f1}) AddAttribute(self,:#{f1}) ok } "
-		cCode = SubStr(cCode,"#{f1}",cKeyword)
-		eval(cCode)	
-		AddMethod(oObject,"AddAttributes_"+cKeyword,f1)
+		if find(aAllAttributes,cKeyword) { return }
+		aAllAttributes + cKeyword
+		cCode = " func "+ "AddAttributes_"+cKeyword +
+				" {  defineAttribute(:"+cKeyword+") } " + nl
+		return cCode
 
 	func PrepareNewClass aPara 
 		Para2Attributes(aPara)
-		CreateTheTempClass()
-		DefineAddAttributes()
+		cCode = CreateTheTempClass()
+		cCode += DefineAddAttributes()
+		return cCode
 
 	func PrepareCommandExpr
-		cCode = " 	f1 = func { 
-			StartCommand()
-			CommandData()[:name] = :#{f1}
-			CommandData()[:nExpr] = 0
-			CommandData()[:aExpr] = []
-			# We return :Natural_Null because the values returned
-			# From this function will call braceexpr() !
-			# And we need unique value to avoid it.
-			return :NATURAL_NULL
-		} "
-		cCode = SubStr(cCode,"#{f1}",cKeyword)
-		eval(cCode)	
-		AddMethod(oObject,"Get"+cKeyword,f1)
+		# We return :NLNV because the values returned
+		# From this function will call braceexpr() !
+		# And we need unique value to avoid it.
+		cCode = " func "+"Get"+cKeyword+" { return getKeyword(:"+cKeyword+") } " + nl
+		return cCode	
 
 	func GetExpr nCount,cType
-		cCode = " 	f1 = func ExprValue { 
-			if isCommand() and CommandData()[:name] = :#{f1} {
-				#{f3}
-					CommandData()[:nExpr]++   
-					CommandData()[:aExpr] + ExprValue
-					if CommandData()[:nExpr] = #{f2} {
-						BraceExecute_#{f1}()
-					}
-				#{f4}
-			}
-		} "
-		cCode = SubStr(cCode,"#{f1}",cKeyword)
-		cCode = SubStr(cCode,"#{f2}",""+nCount)
-		switch cType {
-			case :string
-				cCode = SubStr(cCode,"#{f3}","if isString(ExprValue) and ExprValue != :NATURAL_NULL {")
-				cCode = SubStr(cCode,"#{f4}","}")
-			case :number 
-				cCode = SubStr(cCode,"#{f3}","if isNumber(ExprValue) {")
-				cCode = SubStr(cCode,"#{f4}","}")
-			case :any 
-				cCode = SubStr(cCode,"#{f3}","if (isString(ExprValue) and ExprValue != :NATURAL_NULL) or isNumber(ExprValue) {")
-				cCode = SubStr(cCode,"#{f4}","}")
-		}
-		eval(cCode)	
-		AddMethod(oObject,"BraceExprEval_"+cKeyword,f1)
+		cCode = " func "+"BraceExprEval_"+cKeyword+" ExprValue { " +
+				"processExprValue(ExprValue,:"+cKeyword+","+nCount+",:"+cType+") }"+nl
+		return cCode
 
 	func GetExprNumbers nCount
-		GetExpr(nCount,:Number)
+		return GetExpr(nCount,:Number)
 
 	func GetExprStrings nCount
-		GetExpr(nCount,:String)
+		return GetExpr(nCount,:String)
 
 	func GetExprAny nCount
-		GetExpr(nCount,:Any)
+		return GetExpr(nCount,:Any)
 
 	func SyntaxIsKeyword  aPara
-		PrepareNewClass(aPara)
-		AddMethod(oObject,"Get"+cKeyword,fFunc)
-
-	func DefineExecute
-		AddMethod(oObject,"BraceExecute_"+cKeyword,fFunc)
+		lSyntaxIsKeyword = True
+		cmdEval(PrepareNewClass(aPara))
+		lSyntaxIsKeyword = False
 
 	func SyntaxIsKeywordNumbers aPara,nCount
-		PrepareNewClass(aPara)
-		PrepareCommandExpr()		
-		GetExprNumbers(nCount)
-		DefineExecute()
+		cCode = PrepareNewClass(aPara)
+		cCode += PrepareCommandExpr()	
+		cCode += GetExprNumbers(nCount)
+		cmdEval(cCode)	
 
 	func SyntaxIsKeywordNumberNumber  aPara
 		SyntaxIsKeywordNumbers(aPara,2)
@@ -109,10 +138,10 @@ class NaturalCommand
 		SyntaxIsKeywordNumbers(aPara,1)
 
 	func SyntaxIsKeywordStrings aPara,nCount
-		PrepareNewClass(aPara)
-		PrepareCommandExpr()		
-		GetExprStrings(nCount)
-		DefineExecute()
+		cCode = PrepareNewClass(aPara)
+		cCode += PrepareCommandExpr()
+		cCode += GetExprStrings(nCount)
+		cmdEval(cCode)		
 
 	func SyntaxIsKeywordStringString  aPara
 		SyntaxIsKeywordStrings(aPara,2)
@@ -121,10 +150,10 @@ class NaturalCommand
 		SyntaxIsKeywordStrings(aPara,1)
 
 	func SyntaxIsKeywordExpressions aPara,nCount
-		PrepareNewClass(aPara)
-		PrepareCommandExpr()		
-		GetExprAny(nCount)
-		DefineExecute()
+		cCode = PrepareNewClass(aPara)
+		cCode += PrepareCommandExpr()	
+		cCode += GetExprAny(nCount)
+		cmdEval(cCode)	
 
 	func SyntaxIsKeywordExpressionExpression  aPara
 		SyntaxIsKeywordExpressions(aPara,2)
@@ -132,159 +161,109 @@ class NaturalCommand
 	func SyntaxIsKeywordExpression  aPara
 		SyntaxIsKeywordExpressions(aPara,1)
 
-	func DefineCommandKeyword oObject,cKeyword
+	func DefineCommandKeyword cKeyword
 		# We uses this method
 		# To be able to share keywords between commands 		
 		if find(aAllKeywords,cKeyword) { return }
 		aAllKeywords + cKeyword 
-		cCode = '
-			f1 = func {
-				if ! isAttribute(self,"aMethods_#{f1}") {
-					AddAttribute(self,"aMethods_#{f1}")
-					aMethods_#{f1} = []
-					aClassMethods = methods(self)	
-					for cMethod in aClassMethods {
-						if right(cMethod,len("getkeyword_#{f1}")) = "getkeyword_#{f1}" {
-							aMethods_#{f1} + cMethod
-						}
-					}
-				}
-				for cMethod in aMethods_#{f1} {
-					call cMethod()
-				}
-				return :NATURAL_NULL
-			}
-		'
-		cCode = substr(cCode,"#{f1}",cKeyword)
-		eval(cCode)
-		AddMethod(oObject,"Get"+cKeyword,f1)
-
-	func CommandPara2Attributes aPara
-		cPackage = aPara[:Package]
-		cCommand = aPara[:Command]
-		cCommandNoSpaces = substr(cCommand," ","")
-		fFunc = aPara[:Function]				
-		aKeywords = split(cCommand," ")
-
-	func CreateCommandClass 
-		cCode = "
-			oObject = new #{f1}.#{f2}
-			Package #{f1}
-			Class #{f2}
-		"
-		cCode = substr(cCode,"#{f1}",cPackage)
-		cCode = substr(cCode,"#{f2}",cCommandNoSpaces)
-		eval(cCode)
+		/* 
+			If the keyword is the first keyword in a command, add it to the end of the list()
+			So the same keyword in the middle/end of other commands are executed first
+		*/
+		cCode = ' func '+"Get"+cKeyword+' { return processCommandKeyword(:'+cKeyword+') }' + nl
+		return cCode
 
 	func DefineCommandAttributes
-		cCode = " 	f1 = func { " + nl
+		cCode = " func "+ "AddAttributes_"+cCommandNoSpaces+ " { "
+		cCode += "defineAttribute(["
+		n = 0
+		nMax = len(aKeywords)
 		for cKeyword in aKeywords {
-			cCode += "
-				if not isAttribute(self,:#{f1}) {
-					AddAttribute(self,:#{f1})
-				}
-			"
-			cCode = SubStr(cCode,"#{f1}",cKeyword)
+			if find(aAllAttributes,cKeyword) { n++ loop }
+			aAllAttributes + cKeyword
+			cCode += ":"+cKeyword
+			if n++ != nMax { cCode += "," }
 		}
-		cCode += "} "
-		eval(cCode)	
-		AddMethod(oObject,"AddAttributes_"+cCommandNoSpaces,f1)
+		cCode += "]) }" + nl
 
 		# Define keywords 
 
 		for cKeyword in aKeywords {
-			DefineCommandKeyword(oObject,cKeyword)
+			cCode += DefineCommandKeyword(cKeyword)
 		}
 
-	func SyntaxIsCommand  aPara
+		return cCode 
+
+	func prepareNewCommand aPara
+
 		CommandPara2Attributes(aPara)
 
 		# Create the Class
-		CreateCommandClass()
+		cCode = CreateTheTempClass()
 
 		# Add Attributes 
-		DefineCommandAttributes()
+		cCode += DefineCommandAttributes()
+
+		return cCode
+
+	func SyntaxIsCommand  aPara
+
+		cCodeBuf = prepareNewCommand(aPara)
 
 		# Command Keywords Methods 
+		if ! find(aAllKeywordsMethods,aKeywords[1]+"_1") {
+			aAllKeywordsMethods + (aKeywords[1]+"_1")
+			cCodeBuf += ` func getkeyword1_`+aKeywords[1] +			
+					` { return getFirstKeyword() } ` + nl
+		}
 
-		cCode = " 	f1 = func { 
-			StartCommand()
-			CommandData()[:nKeyword] = 1
-		} "
-		eval(cCode)	
-		AddMethod(oObject,cCommandNoSpaces+"_getkeyword_"+aKeywords[1],f1)
-		for t = 2 to len(aKeywords) {
-			cCode = " 	f1 = func { 
-				if (not IsCommand()) or (not isNumber(CommandData()[:nKeyword])) { return }		
-				if CommandData()[:nKeyword] = #{f1} - 1 {
-					CommandData()[:nKeyword] = #{f1}
-					#{f2}
-				}
-			} "
+		nKeywordsCount = len(aKeywords)
+		for t = 2 to nKeywordsCount {
+			if find(aAllKeywordsMethods,aKeywords[t]+"_"+t) and t != nKeywordsCount {
+				loop
+			}
+			aAllKeywordsMethods + (aKeywords[t]+"_"+t) 
+			cCode = ` func `+cCommandNoSpaces+"_getkeywordn_"+aKeywords[t] +
+					` { return getSubKeyword(#{f1},"#{f2}") } ` + nl
 			cCode = substr(cCode,"#{f1}",""+t)
-			cExecuteMethod = "BraceExecute_"+cCommandNoSpaces
-			if t = len(aKeywords) {
-				cCode = substr(cCode,"#{f2}",cExecuteMethod+"()")
+			if t = nKeywordsCount {
+				cExecuteMethod = "BraceExecute_"+cCommandNoSpaces
+				cCode = substr(cCode,"#{f2}",cExecuteMethod)
 			else
 				cCode = substr(cCode,"#{f2}","")
 			}
-			eval(cCode)	
-			AddMethod(oObject,cCommandNoSpaces+"_getkeyword_"+aKeywords[t],f1)
+			cCodeBuf += cCode
 		}
 
-		# Define BraceExecute
-		AddMethod(oObject,cExecuteMethod,fFunc)
+		cmdEval(cCodeBuf)
 
 	func SyntaxIsCommandExpressions_  aPara,cExprType,nCount
 
-		CommandPara2Attributes(aPara)
-
-		# Create the Class
-		CreateCommandClass()
-
-		# Add Attributes 
-		DefineCommandAttributes()
+		cCodeBuf = prepareNewCommand(aPara)
 
 		# Command Keywords Methods 
 
-		cCode = " 	f1 = func { 
-			StartCommand()
-			CommandData()[:nKeyword] = 1
-		} "
-		eval(cCode)	
-		AddMethod(oObject,cCommandNoSpaces+"_getkeyword_"+aKeywords[1],f1)
-		for t = 2 to len(aKeywords) {
-			cCode = " 	f1 = func { 
-				if (not IsCommand()) or (not isNumber(CommandData()[:nKeyword])) { return }		
-				if CommandData()[:nKeyword] = #{f1} - 1 {
-					CommandData()[:nKeyword] = #{f1}
-					#{f2}
-				}
-			} "
-			cCode = substr(cCode,"#{f1}",""+t)
-			cExecuteMethod = "BraceExecute_"+cCommandNoSpaces
-
-			if t = len(aKeywords) {
-				cCode2 = '
-					CommandData()[:name] = :#{f1}
-					CommandData()[:nExpr] = 0
-					CommandData()[:aExpr] = []
-				'
-				cCode2 = substr(cCode2,"#{f1}",cCommandNoSpaces)
-				cCode = substr(cCode,"#{f2}",cCode2)
-			else
-				cCode = substr(cCode,"#{f2}","")
+		if ! find(aAllKeywordsMethods,aKeywords[1]+"_1") {
+			aAllKeywordsMethods + (aKeywords[1]+"_1")
+			cCodeBuf += ` func getkeyword1_`+aKeywords[1] +
+			` { return getFirstKeyword() } ` + nl
+		}
+		nKeywordsCount = len(aKeywords)
+		for t = 2 to nKeywordsCount {
+			if find(aAllKeywordsMethods,aKeywords[t]+"_"+t) and t != nKeywordsCount {
+				loop
 			}
-			eval(cCode)	
-			AddMethod(oObject,cCommandNoSpaces+"_getkeyword_"+aKeywords[t],f1)
+			aAllKeywordsMethods + (aKeywords[t]+"_"+t)
+			cCode = ` func `+cCommandNoSpaces+"_getkeywordn_"+aKeywords[t]+
+					" { return getSubKeywordBeforeExpr("+t+","+len(aKeywords)+",:"+cCommandNoSpaces+") }" + nl
+			cCodeBuf += cCode
 		}
 
 		# Command Expressions
 		cKeyword = cCommandNoSpaces
-		GetExpr(nCount,cExprType)
+		cCodeBuf += GetExpr(nCount,cExprType)
 
-		# Define BraceExecute
-		AddMethod(oObject,cExecuteMethod,fFunc)
+		cmdEval(cCodeBuf)
 
 	func SyntaxIsCommandExpression  aPara
 		SyntaxIsCommandExpressions_(aPara,:Any,1)
@@ -312,3 +291,40 @@ class NaturalCommand
 
 	func SyntaxIsCommandExpressions  aPara,nCount
 		SyntaxIsCommandExpressions_(aPara,:any,nCount)
+
+	func startCache cName
+		lCacheCommands = True 
+		cGroupName = cName
+		cCommandsCache = ""
+
+	func endCache
+		lCacheCommands = False
+		cCommandsCache = "Package " + cPackage + nl +
+			"Class " + cGroupName + nl + cCommandsCache
+		lEvalError = False
+		try {
+			eval(cCommandsCache)
+		catch 
+			lEvalError = True 
+			write("natlib_error.txt",cCommandsCache+C_NATLIB_BEFORERROR+cCatchError)
+		}
+		if lEvalError {
+			raise(C_NATLIB_ERROR_EVAL)
+		}
+		cCommandsCache = ""
+
+	func cmdEval cCode
+		if lCacheCommands {
+			cCommandsCache += cCode + nl
+			return
+		}
+		lEvalError = False
+		try {
+			eval(cCode)
+		catch 
+			lEvalError = True 
+			write("natlib_error.txt",cCode+C_NATLIB_BEFORERROR+cCatchError)
+		}
+		if lEvalError {
+			raise(C_NATLIB_ERROR_EVAL)
+		}
