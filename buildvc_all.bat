@@ -3,7 +3,7 @@ setlocal enableextensions enabledelayedexpansion
 set path=%~dp0\bin;%path%
 set rootdir=%~dp0
 
-cd %rootdir%\language\src
+cd %rootdir%\language\build
 call buildvc.bat %1 %2
 
 cd  %rootdir%\tools\ring2exe

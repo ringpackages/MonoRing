@@ -26,7 +26,7 @@ cd binupdate
 if /I ["%ringbuildtarget%"]==["x64"] (
     call installqt515_x64.bat
 ) else (
-    call installqt515_x86.bat
+    call installqt515.bat
 )
 
 cd %rootdir%\extensions\ringqt\binupdate
