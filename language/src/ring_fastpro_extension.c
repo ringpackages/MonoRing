@@ -34,6 +34,9 @@
 **                    Append
 **                    AllSum
 **                    Mandelbrot
+**
+** 2026-03-28 B.M.    ring_transform3d  //  Apply a 4x4 transformation matrix to every point in a Nx4 point array.
+**                    transform3d( FC, RC )
 */
 
 #include "ring.h"
@@ -569,17 +572,14 @@ RING_FUNC(ring_updatelist)
             if ( RING_API_PARACOUNT == 3) {
                    nOPCode = 6 ;
                    nValue  = 1;
-                 //pList   = RING_API_GETLIST(1) ;     // Transpose
             }
             else if ( RING_API_ISLIST(4) ) {
                 nOPCode = 6 ;
-              //pList   = RING_API_GETLIST(1) ;
                 pListB  = RING_API_GETLIST(4) ;
             }   
             else if ( RING_API_ISNUMBER(4) ) {
                 nOPCode = 6 ;
-              //pList   = RING_API_GETLIST(1) ;
-                nValue  = (int) RING_API_GETNUMBER(4) ;  // Scalar-nValue , 0=BAD          
+                nValue  = (double) RING_API_GETNUMBER(4) ;  // Scalar-nValue
             }
             else {
                 RING_API_ERROR(RING_API_BADPARATYPE);
@@ -806,6 +806,9 @@ RING_FUNC(ring_updatelist)
     else if ( strcmp(cOperation,"mandelbrot") == 0 ) {
         nOPCode += 4400 ;
     }
+    else if ( strcmp(cOperation,"emul") == 0 ) {
+        nOPCode += 4500 ;
+    }
      
     else {
         RING_API_ERROR("The second parameter -cOperation- must be a string: [Set | Add | Sub | Mul | Div | Copy | Merge | MergeSub |  MergeMul | MergeDiv | Matrix | etc ");
@@ -935,7 +938,6 @@ RING_FUNC(ring_updatelist)
         case 206 :
             /* Add Matrix 5X5  aList + aListB => aListC */
 
-            //  pListA = RING_API_GETLIST(1) ;
                 pListB = RING_API_GETLIST(4) ;
 
                 nStart = 1 ;
@@ -1060,7 +1062,6 @@ RING_FUNC(ring_updatelist)
         case 306 :
             /* Sub Matrix 5X5  aList - aListB => aListC */
 
-            //  pList  = RING_API_GETLIST(1) ;
                 pListB = RING_API_GETLIST(4) ;
 
                 nStart = 1 ;
@@ -1218,10 +1219,11 @@ RING_FUNC(ring_updatelist)
                     Sum = 0;
 
                     for (k = 1; k <=  nEnd; k++)
-                    {   // Sum += A[vA][k] * B[k][hB]
+                    {   
+			// Sum += A[vA][k] * B[k][hB]
                         //          R   C      R  C
                         
-						pSubListB = ring_list_getlist(pListB, k) ;       // Row-B k 4x4
+			pSubListB = ring_list_getlist(pListB, k) ;       // Row-B k 4x4
 						
                         valueA  = ring_list_getdouble( pSubList, k ) ;   // Col-A  k
                         valueB  = ring_list_getdouble( pSubListB, hB ) ; // Col-B   hB
@@ -1748,13 +1750,15 @@ RING_FUNC(ring_updatelist)
 
 
             for (hB = 1; hB <= nEnd; hB++)      // Cols hB j
-            {   for (vA = 1; vA <= nRow; vA++)   // Rows vA i
-                {
-                     pSubList  = ring_list_getlist(pList, hB) ;
-                     valueA    = ring_list_getdouble( pSubList, vA ) ;
+            {   
+                pSubListC = ring_list_getlist(pListC, hB); // Row of C
 
-                     pSubListC = ring_list_getlist(pListC, vA ) ;
-                     ring_list_setdouble_gc(pVM->pRingState,pSubListC, hB, valueA );
+                for (vA = 1; vA <= nRow; vA++)   // Rows vA i
+                {
+                     pSubList  = ring_list_getlist(pList, vA) ; // Row of A
+                     valueA    = ring_list_getdouble( pSubList, hB ) ; // Col of A
+
+                     ring_list_setdouble_gc(pVM->pRingState,pSubListC, vA, valueA ); // Col of C
                 }
             }
 
@@ -1766,8 +1770,6 @@ RING_FUNC(ring_updatelist)
         
         case 1506 :
             /* Scalar Matrix-A  * K ==> MatriX-C */
-           
-            k  = RING_API_GETNUMBER(4);
            
             nRow   = ring_list_getsize(pList);           //  Row-A
             pRow   = ring_list_getlist(pList,nRow);
@@ -1783,11 +1785,13 @@ RING_FUNC(ring_updatelist)
            
             for( vA = 1; vA <= nRow ; vA++)
             {   for( hB = 1; hB <= nEnd; hB++)
-                { // aListC[vA][hB] = k * (aList[vA][hB])  
+                { 
+
+                  // aListC[vA][hB] = k * (aList[vA][hB])  
 
                   pSubList  = ring_list_getlist(pList, vA) ;        // Row
                   valueA    = ring_list_getdouble( pSubList, hB ) ; // Col
-                  valueC    = valueA * k;
+                  valueC    = valueA * nValue;
 
                   pSubListC = ring_list_getlist(pListC, vA ) ;
                   ring_list_setdouble_gc(pVM->pRingState,pSubListC, hB, valueC );
@@ -1892,9 +1896,7 @@ RING_FUNC(ring_updatelist)
         
         case 1706 :
             /* Fill Matrix-A  with k nValue */
-           
-            k  = RING_API_GETNUMBER(4);           // Fill with nValue
-           
+                     
             nRow   = ring_list_getsize(pList);           //  Row-A
             pRow   = ring_list_getlist(pList,nRow);
             nEnd   = ring_list_getsize(pRow) ;           //  Col-A
@@ -1907,7 +1909,7 @@ RING_FUNC(ring_updatelist)
                   pSubList  = ring_list_getlist(pList, vA) ;                // Row
                               ring_list_getdouble( pSubList, hB ) ;         // Col 
                
-                  ring_list_setdouble_gc(pVM->pRingState,pSubList, hB, k);  // Set R-C = k
+                  ring_list_setdouble_gc(pVM->pRingState,pSubList, hB, nValue);  // Set R-C = k
                 }
             }       
         
@@ -1992,6 +1994,7 @@ RING_FUNC(ring_updatelist)
                             ring_list_setdouble_gc(pVM->pRingState,pSubList, v, 1);  // Set R-C=1      
             }
 
+            RING_API_RETLIST(pList);
             //----------------
             break ;
 
@@ -2018,6 +2021,7 @@ RING_FUNC(ring_updatelist)
            }        
          }
 
+         RING_API_RETLIST(pList);
          //----------------
          break ;
 
@@ -2512,26 +2516,70 @@ RING_FUNC(ring_updatelist)
       //===End 3206 ==============================  
 
         case 3306 :
-         /* SoftMax Matrix-A   Can NOT self call updateList()*/ 
-         // NOT IMPLEMENTED -- Use FastProSoftMax() Function 
-         
-         nRow   = ring_list_getsize(pList);           //  Row-A  5x5
-         pRow   = ring_list_getlist(pList,nRow);
-         nEnd   = ring_list_getsize(pRow) ;           //  Col-A  
+        /* Softmax Matrix-A */    
 
-         //--- CREATE Output List-C - Outside Dims.-----
-         pListC  = RING_API_NEWLISTUSINGBLOCKS2D( 1, nEnd) ; // 1x5  
+        nRow   = ring_list_getsize(pList);           //  Row-A
+        pRow   = ring_list_getlist(pList,nRow);
+        nEnd   = ring_list_getsize(pRow) ;           //  Col-A  
 
-         nRowC   = ring_list_getsize(pListC) ;        // Row-C v
-         pRowC   = ring_list_getlist(pListC,nRowC);                
-         nEndC   = ring_list_getsize(pRowC) ;         // Col-C h
+        //--- CREATE Output List-C - Same Dims.-----
+        pListC  = RING_API_NEWLISTUSINGBLOCKS2D( nRow, nEnd) ;
+
+        nRowC   = ring_list_getsize(pListC) ;        // Row-C v
+        pRowC   = ring_list_getlist(pListC,nRowC);                
+        nEndC   = ring_list_getsize(pRowC) ;         // Col-C h
          
         //-------------------
- 
-         RING_API_ERROR("SoftMAx: NOT IMPLEMENTED -- Use FastProSoftMax() Function "); 
-        
+
+        for( v = 1; v <= nRow; v++ ) 
+        {  
+            // 1. Find Max Value in the Row (For Numerical Stability)
+            pSubList = ring_list_getlist(pList, v); // Row Input
+            double maxVal = -1.0e300; // Very small number
+            
+            for ( h = 1; h <= nEnd; h++) {
+                valueA = ring_list_getdouble(pSubList, h);
+                if (valueA > maxVal) {
+                    maxVal = valueA;
+                }
+            }
+
+            // 2. Calculate Exponentials and Sum
+            double rowSum = 0.0;
+            pSubListC = ring_list_getlist(pListC, v); // Row Output
+            
+            for ( h = 1; h <= nEnd; h++) {
+                valueA = ring_list_getdouble(pSubList, h);
+                // exp(x - max) prevents overflow
+                valueC = exp(valueA - maxVal); 
+                
+                // Store temporarily in output list
+                ring_list_setdouble_gc(pVM->pRingState, pSubListC, h, valueC);
+                
+                rowSum += valueC;
+            }
+
+            // 3. Normalize (Divide by Sum)
+            for ( h = 1; h <= nEnd; h++) {
+                // Retrieve the exp value we just stored
+                valueC = ring_list_getdouble(pSubListC, h);
+                
+                // Divide by sum to get probability
+                if (rowSum != 0) {
+                    valueC = valueC / rowSum;
+                } else {
+                    valueC = 0.0; // Should not happen with exp
+                }
+                
+                ring_list_setdouble_gc(pVM->pRingState, pSubListC, h, valueC);
+            }
+        }
+         
+        RING_API_RETLISTBYREF( pListC );
+         
         //----------
         break ;
+
 
       //===End 3306 ==============================             
 
@@ -2539,7 +2587,7 @@ RING_FUNC(ring_updatelist)
         case 3406 :
             /* ScalarDiv Matrix-A / K  ==> MatriX-C */
            
-            k  = RING_API_GETNUMBER(4);           // DivideBy nValue
+            // k  = RING_API_GETNUMBER(4);           // DivideBy nValue
            
             nRow   = ring_list_getsize(pList);           //  Row-A
             pRow   = ring_list_getlist(pList,nRow);
@@ -2561,7 +2609,7 @@ RING_FUNC(ring_updatelist)
                 for( hB = 1; hB <= nEnd; hB++)
                 {   
                   valueA    = ring_list_getdouble( pSubList, hB ) ; // Col
-                  valueC    = valueA / k;
+                  valueC    = valueA / nValue;
 
                   pSubListC = ring_list_getlist(pListC, vA ) ;
                   ring_list_setdouble_gc(pVM->pRingState,pSubListC, hB, valueC );
@@ -3036,6 +3084,44 @@ RING_FUNC(ring_updatelist)
 
          //----------
          break ;
+
+        case 4506 :
+            /* Element-Wise Mul Matrix A .* B => C */
+            
+            pListB = RING_API_GETLIST(4) ;
+
+            nRow   = ring_list_getsize(pList);      // Row-A
+            pRow   = ring_list_getlist(pList, nRow);
+            nEnd   = ring_list_getsize(pRow) ;      // Col-A
+
+            nRowB   = ring_list_getsize(pListB) ;
+            pRowB   = ring_list_getlist(pListB, nRowB);
+            nEndB   = ring_list_getsize(pRowB) ;
+
+            if ( (nRow != nRowB) || (nEnd != nEndB) ) {
+                RING_API_ERROR("Element-Wise Mul: Matrices must have same dimensions");
+                return ;
+            }
+
+            //--- CREATE Output List - Same Dims.-----
+            pListC  = RING_API_NEWLISTUSINGBLOCKS2D( nRow, nEnd) ;
+
+            for ( vA = 1 ; vA <= nRow ; vA++ ) {
+                pSubList  = ring_list_getlist(pList, vA) ;
+                pSubListB = ring_list_getlist(pListB, vA) ;
+                pSubListC = ring_list_getlist(pListC, vA) ;
+
+                for ( hB = 1 ; hB <= nEnd ; hB++ ) {
+                     valueA = ring_list_getdouble(pSubList, hB);
+                     valueB = ring_list_getdouble(pSubListB, hB);
+                     valueC = valueA * valueB;
+
+                     ring_list_setdouble_gc(pVM->pRingState,pSubListC, hB, valueC);
+                }
+            }
+
+            RING_API_RETLISTBYREF( pListC );
+            break ;
         
 
       //===End 4406 ==============================  
@@ -3533,6 +3619,137 @@ RING_FUNC(ring_updatebytescolumn)
     RING_API_RETSTRING2(pBytes,nBytesSize);
 }
 
+
+//===========================================================
+// ring_transform3d  --  Apply a 4x4 transformation matrix
+//                       to every point in a Nx4 point array.
+//
+// Ring call:
+//   transform3d( FC, RC )
+//
+//   FC : List[4][4]   -- combined 4x4 transformation matrix
+//                        (result of Rotation * Scale * Translate *
+//                         Shear * Reflection chain, as built in
+//                         Mug-Rotation-C-Calc.ring DrawMatrix())
+//   RC : List[N][4]   -- point array  [x, y, z, 1]
+//                        transformed in-place: RC[i][1..3]
+//                        are overwritten with the new x',y',z'
+//
+// Each point is treated as a column vector [x,y,z,1]^T.
+// The result column vector R = FC * P is computed for every
+// row i of RC, and the first three components are written back.
+//
+// Equivalent to the Ring loop in Mug-Rotation-C-Calc.ring:
+//
+//   for i = 1 to ShapeLen
+//       A = [[ ShapeMug[i][1] ],
+//            [ ShapeMug[i][2] ],
+//            [ ShapeMug[i][3] ],
+//            [       1        ]]
+//       C = MatrixMultiply(FC, A)
+//       Corners[i][1] = C[1][1]
+//       Corners[i][2] = C[2][1]
+//       Corners[i][3] = C[3][1]
+//   next
+//
+// Performance note:
+//   Avoids all per-point list allocation by caching the
+//   four rows of FC once before the point loop.
+//===========================================================
+
+RING_FUNC(ring_transform3d)
+{
+    List   *pFC, *pRC ;
+    List   *pFCrow[4] ;          /* pointers to the 4 rows of FC            */
+    List   *pPoint ;             /* pointer to the current row of RC         */
+    double  fc[4][4] ;           /* local copy of the 4x4 matrix elements    */
+    double  px, py, pz ;         /* input point components                   */
+    double  rx, ry, rz ;         /* output point components                  */
+    int     nPoints, i, r, c ;
+    VM     *pVM ;
+
+    pVM = (VM *) pPointer ;
+
+    /* ---- parameter validation ---- */
+
+    if ( RING_API_PARACOUNT != 2 ) {
+        RING_API_ERROR("transform3d: expected exactly 2 parameters (FC, RC)");
+        return ;
+    }
+    if ( ! RING_API_ISLIST(1) ) {
+        RING_API_ERROR("transform3d: parameter 1 (FC) must be a 4x4 list");
+        return ;
+    }
+    if ( ! RING_API_ISLIST(2) ) {
+        RING_API_ERROR("transform3d: parameter 2 (RC) must be an Nx4 list");
+        return ;
+    }
+
+    pFC = RING_API_GETLIST(1) ;
+    pRC = RING_API_GETLIST(2) ;
+
+    /* ---- validate FC dimensions: must be 4 rows of 4 ---- */
+    if ( ring_list_getsize(pFC) != 4 ) {
+        RING_API_ERROR("transform3d: FC must have exactly 4 rows");
+        return ;
+    }
+    for ( r = 0 ; r < 4 ; r++ ) {
+        if ( ! ring_list_islist(pFC, r+1) ) {
+            RING_API_ERROR("transform3d: FC rows must be lists");
+            return ;
+        }
+        pFCrow[r] = ring_list_getlist(pFC, r+1) ;
+        if ( ring_list_getsize(pFCrow[r]) != 4 ) {
+            RING_API_ERROR("transform3d: each FC row must have exactly 4 columns");
+            return ;
+        }
+    }
+
+    /* ---- cache FC into a plain C array for fast access ---- */
+    for ( r = 0 ; r < 4 ; r++ ) {
+        for ( c = 0 ; c < 4 ; c++ ) {
+            fc[r][c] = ring_list_getdouble(pFCrow[r], c+1) ;
+        }
+    }
+
+    /* ---- iterate over every point in RC ---- */
+    nPoints = ring_list_getsize(pRC) ;
+
+    for ( i = 1 ; i <= nPoints ; i++ ) {
+
+        if ( ! ring_list_islist(pRC, i) ) continue ;
+
+        pPoint = ring_list_getlist(pRC, i) ;
+
+        if ( ring_list_getsize(pPoint) < 3 ) continue ;
+
+        /* read x, y, z  (w is assumed 1, matching the Ring code) */
+        px = ring_list_getdouble(pPoint, 1) ;
+        py = ring_list_getdouble(pPoint, 2) ;
+        pz = ring_list_getdouble(pPoint, 3) ;
+
+        /* R = FC * [px, py, pz, 1]^T
+        **
+        **  rx = fc[0][0]*px + fc[0][1]*py + fc[0][2]*pz + fc[0][3]
+        **  ry = fc[1][0]*px + fc[1][1]*py + fc[1][2]*pz + fc[1][3]
+        **  rz = fc[2][0]*px + fc[2][1]*py + fc[2][2]*pz + fc[2][3]
+        **  (rw = fc[3][3] == 1, not stored back)
+        */
+        rx = fc[0][0]*px + fc[0][1]*py + fc[0][2]*pz + fc[0][3] ;
+        ry = fc[1][0]*px + fc[1][1]*py + fc[1][2]*pz + fc[1][3] ;
+        rz = fc[2][0]*px + fc[2][1]*py + fc[2][2]*pz + fc[2][3] ;
+
+        /* write results back into RC[i][1..3] in-place */
+        ring_list_setdouble_gc(pVM->pRingState, pPoint, 1, rx) ;
+        ring_list_setdouble_gc(pVM->pRingState, pPoint, 2, ry) ;
+        ring_list_setdouble_gc(pVM->pRingState, pPoint, 3, rz) ;
+    }
+
+    /* no return value needed; RC is modified in-place via its Ring reference */
+}
+
+//===========================================================
+
 RING_FUNC(ring_addbytescolumn)
 {
     unsigned char *pBytes, *pNewBytes;
@@ -3588,4 +3805,5 @@ void ring_vm_fastpro_loadfunctions ( RingState *pRingState )
     RING_API_REGISTER("updatecolumn",ring_updatecolumn);
     RING_API_REGISTER("updatebytescolumn",ring_updatebytescolumn);
     RING_API_REGISTER("addbytescolumn",ring_addbytescolumn);
+    RING_API_REGISTER("transform3d",ring_transform3d);
 }
